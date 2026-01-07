@@ -31,6 +31,7 @@ A comprehensive collection of code snippets for XGBoost in Python.
 - [SHAP Values](#shap-values)
 - [Hyperparameter Tuning](#hyperparameter-tuning)
 - [Ranking](#ranking)
+- [Categorical Features (Native Support)](#categorical-features-native-support)
 
 ---
 
@@ -837,6 +838,135 @@ ranker = XGBRanker(
 
 ranker.fit(X_train, y_train, group=groups_train)
 scores = ranker.predict(X_test)
+```
+
+---
+
+## Categorical Features (Native Support)
+
+> **Note:** Native categorical support was added in XGBoost 1.5. Requires `tree_method='hist'` or `device='cuda'`.
+
+**Using sklearn API (recommended):**
+
+```python
+import pandas as pd
+from xgboost import XGBClassifier
+
+# Create DataFrame with categorical columns
+data = pd.DataFrame({
+    'color': ['red', 'blue', 'green', 'red', 'blue'],
+    'size': ['small', 'medium', 'large', 'medium', 'small'],
+    'price': [10.0, 15.0, 20.0, 12.0, 8.0],
+    'label': [0, 1, 1, 0, 0]
+})
+
+# Convert to 'category' dtype
+categorical_columns = ['color', 'size']
+for col in categorical_columns:
+    data[col] = data[col].astype('category')
+
+X = data.drop('label', axis=1)
+y = data['label']
+
+# Enable categorical support
+model = XGBClassifier(
+    enable_categorical=True,
+    tree_method='hist'
+)
+model.fit(X, y)
+
+# Prediction (ensure same category dtype)
+new_data = pd.DataFrame({
+    'color': pd.Categorical(['green', 'red']),
+    'size': pd.Categorical(['medium', 'large']),
+    'price': [18.0, 25.0]
+})
+predictions = model.predict(new_data)
+```
+
+**Using native API with DMatrix:**
+
+```python
+import xgboost as xgb
+import pandas as pd
+
+# Prepare categorical DataFrame
+df = pd.DataFrame({
+    'cat_feature': pd.Categorical(['a', 'b', 'c', 'a', 'b']),
+    'num_feature': [1.0, 2.0, 3.0, 4.0, 5.0]
+})
+labels = [0, 1, 1, 0, 1]
+
+# Create DMatrix with enable_categorical
+dtrain = xgb.DMatrix(df, label=labels, enable_categorical=True)
+
+params = {
+    'objective': 'binary:logistic',
+    'tree_method': 'hist',
+    'max_depth': 3
+}
+
+model = xgb.train(params, dtrain, num_boost_round=100)
+```
+
+**Specifying feature types manually:**
+
+```python
+import xgboost as xgb
+import numpy as np
+
+# When using arrays, specify feature_types
+X = np.array([[0, 1.5], [1, 2.5], [2, 3.5], [0, 4.5]])  # First col is categorical (encoded)
+y = [0, 1, 1, 0]
+
+dtrain = xgb.DMatrix(X, label=y, feature_types=['c', 'q'])  # 'c' = categorical, 'q' = quantitative
+dtrain.set_info(enable_categorical=True)
+
+# Or with sklearn API
+from xgboost import XGBClassifier
+
+model = XGBClassifier(
+    feature_types=['c', 'q'],
+    enable_categorical=True,
+    tree_method='hist'
+)
+```
+
+**Controlling categorical split strategy:**
+
+```python
+from xgboost import XGBClassifier
+
+model = XGBClassifier(
+    enable_categorical=True,
+    tree_method='hist',
+    max_cat_to_onehot=4,  # Use one-hot encoding if categories <= 4, else partition
+    max_cat_threshold=64  # Max categories for partition-based split
+)
+```
+
+**With mixed numeric and categorical features:**
+
+```python
+import pandas as pd
+from xgboost import XGBRegressor
+
+df = pd.DataFrame({
+    'city': pd.Categorical(['NYC', 'LA', 'Chicago', 'NYC', 'LA']),
+    'bedrooms': [2, 3, 1, 4, 2],
+    'sqft': [1000, 1500, 800, 2000, 1200],
+    'price': [500000, 700000, 300000, 900000, 600000]
+})
+
+X = df.drop('price', axis=1)
+y = df['price']
+
+model = XGBRegressor(
+    enable_categorical=True,
+    tree_method='hist',
+    n_estimators=100
+)
+model.fit(X, y)
 ```
 
 ---
